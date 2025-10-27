@@ -1,9 +1,10 @@
 """
-Authentication dependencies for FastAPI.
+Centralized dependencies for the FastAPI application.
+Following DRY principle - all dependencies in one place.
 """
 
-from typing import Optional
-from fastapi import Depends, HTTPException, status
+from typing import Optional, Annotated
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from src.core.database import SessionDep
 from src.auth.service import AuthService, get_auth_service
@@ -11,10 +12,27 @@ from src.auth.models import User
 from src.auth.security import verify_token
 from src.core.utils import logger
 
-# HTTP Bearer token scheme
+# Security scheme
 security = HTTPBearer()
 
+# Custom header dependencies
+async def get_token_header(x_token: Annotated[str, Header()]):
+    """Validate X-Token header for admin operations."""
+    if x_token != "fake-super-secret-token":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="X-Token header invalid"
+        )
 
+async def get_query_token(token: str):
+    """Validate query token for API access."""
+    if token != "jessica":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="No Jessica token provided"
+        )
+
+# Authentication dependencies
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     auth_service: AuthService = Depends(get_auth_service)
@@ -53,7 +71,6 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-
 async def get_current_active_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
@@ -65,7 +82,6 @@ async def get_current_active_user(
         )
     return current_user
 
-
 async def get_current_superuser(
     current_user: User = Depends(get_current_user)
 ) -> User:
@@ -76,7 +92,6 @@ async def get_current_superuser(
             detail="Not enough permissions"
         )
     return current_user
-
 
 async def get_optional_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -91,21 +106,33 @@ async def get_optional_current_user(
     except HTTPException:
         return None
 
-
 # Permission decorators
 def require_auth(func):
     """Decorator to require authentication."""
     func.__requires_auth__ = True
     return func
 
-
 def require_superuser(func):
     """Decorator to require superuser permissions."""
     func.__requires_superuser__ = True
     return func
 
-
 def require_active_user(func):
     """Decorator to require active user."""
     func.__requires_active_user__ = True
     return func
+
+# Export all dependencies
+__all__ = [
+    "security",
+    "get_token_header", 
+    "get_query_token",
+    "get_current_user",
+    "get_current_active_user",
+    "get_current_superuser", 
+    "get_optional_current_user",
+    "require_auth",
+    "require_superuser", 
+    "require_active_user",
+    "SessionDep"
+]

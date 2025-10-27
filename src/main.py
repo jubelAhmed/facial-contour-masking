@@ -1,27 +1,36 @@
 """
 Main application module that defines FastAPI routes and startup/shutdown events.
+Following FastAPI's recommended project structure.
 """
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from slowapi.errors import RateLimitExceeded
 
-# Import our modules
+# Import dependencies
+from src.dependencies import get_query_token, get_token_header
+
+# Import internal modules
+from src.internal import admin
+
+# Import routers
+from src.routers import auth, facial
+
+# Import core modules
 from src.core.config import config
 from src.core.database import create_db_and_tables
 from src.core.utils import log_startup_banner, log_processing_step
-from src.auth.router import router as auth_router
-from src.facial.router import router as facial_router
 from src.middleware.rate_limiting import limiter, rate_limit_exceeded_handler
 from src.middleware.security import SecurityHeadersMiddleware, RequestLoggingMiddleware, CORSSecurityMiddleware
 
-# Initialize FastAPI app
+# Initialize FastAPI app with global dependencies
 app = FastAPI(
     title=config.app_name, 
     description="API for processing facial images and generating contour masks",
     version=config.version,
-    debug=config.debug
+    debug=config.debug,
+    dependencies=[Depends(get_query_token)]  # Global dependency
 )
 
 # Add security middleware (order matters!)
@@ -45,8 +54,17 @@ from src.monitoring.prometheus import PrometheusMiddleware, setup_prometheus
 app.add_middleware(PrometheusMiddleware)
 
 # Include API routers
-app.include_router(auth_router)
-app.include_router(facial_router)
+app.include_router(auth.router)
+app.include_router(facial.router)
+
+# Include admin router with custom prefix, tags, dependencies, and responses
+app.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(get_token_header)],
+    responses={418: {"description": "I'm a teapot"}},
+)
 
 # Display startup banner
 log_startup_banner("Facial Contour Masking API", "1.0.0")
@@ -77,7 +95,9 @@ async def shutdown_event():
 
 @app.get("/")
 async def root():
+    """Root endpoint with application information."""
     return {
+        "message": "Hello Bigger Applications!",
         "service": config.app_name,
         "version": config.version,
         "status": "operational",

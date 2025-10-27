@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 from passlib.context import CryptContext
 from jose import jwt
-from src.auth.config import AuthConfig
+from src.core.config import AuthConfig
 from src.auth.constants import TokenType
 from src.auth.exceptions import TokenExpiredException, TokenInvalidException
 

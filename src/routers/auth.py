@@ -9,7 +9,7 @@ from src.auth.schemas import (
     UserCreate, UserLogin, UserResponse, TokenResponse, 
     TokenRefresh, PasswordChange, UserUpdate
 )
-from src.auth.dependencies import get_current_user, get_current_superuser
+from src.dependencies import get_current_user, get_current_superuser
 from src.auth.models import User
 from src.core.utils import log_request, log_response, logger
 from src.middleware.rate_limiting import auth_rate_limit, api_rate_limit, admin_rate_limit

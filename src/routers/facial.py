@@ -9,7 +9,7 @@ import uuid
 
 from src.core.database import SessionDep
 from src.core.utils import log_request, log_response, log_job_status, logger
-from src.auth.dependencies import get_current_user, get_optional_current_user
+from src.dependencies import get_current_user, get_optional_current_user
 from src.auth.models import User
 from src.middleware.rate_limiting import processing_rate_limit, status_rate_limit
 
