@@ -25,20 +25,20 @@ async def test_engine():
     """Create a test database engine."""
     # Use in-memory SQLite for testing
     database_url = "sqlite+aiosqlite:///:memory:"
-    
+
     engine = create_async_engine(
         database_url,
         echo=False,  # Set to True for SQL debugging
         poolclass=StaticPool,
-        connect_args={"check_same_thread": False}
+        connect_args={"check_same_thread": False},
     )
-    
+
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
     # Cleanup
     await engine.dispose()
 
@@ -47,11 +47,9 @@ async def test_engine():
 async def test_session(test_engine):
     """Create a test database session."""
     async_session = async_sessionmaker(
-        test_engine, 
-        class_=AsyncSession, 
-        expire_on_commit=False
+        test_engine, class_=AsyncSession, expire_on_commit=False
     )
-    
+
     async with async_session() as session:
         yield session
         await session.rollback()
@@ -63,9 +61,7 @@ async def test_db_manager(test_engine):
     manager = DatabaseManager()
     manager.engine = test_engine
     manager.session_factory = async_sessionmaker(
-        test_engine, 
-        class_=AsyncSession, 
-        expire_on_commit=False
+        test_engine, class_=AsyncSession, expire_on_commit=False
     )
     return manager
 
@@ -74,7 +70,7 @@ async def test_db_manager(test_engine):
 async def cleanup_database(test_engine):
     """Clean up database after each test."""
     yield
-    
+
     # Clean up all tables
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

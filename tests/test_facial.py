@@ -29,18 +29,20 @@ def test_facial_endpoints_exist():
 @patch("src.dependencies.get_facial_service")
 @patch("src.dependencies.get_current_user")
 @patch("src.shared.database.get_session")
-def test_facial_process_endpoint_success(mock_get_session, mock_get_current_user, mock_get_facial_service):
+def test_facial_process_endpoint_success(
+    mock_get_session, mock_get_current_user, mock_get_facial_service
+):
     """Test successful facial processing."""
     # Mock the database session
     mock_session = AsyncMock()
     mock_get_session.return_value = mock_session
-    
+
     # Mock the facial service
     mock_facial_service = AsyncMock()
     mock_response = ProcessingResponse(
         job_id="test-job-123",
         status="pending",
-        message="Processing job created successfully"
+        message="Processing job created successfully",
     )
     mock_facial_service.create_processing_job.return_value = mock_response
     mock_get_facial_service.return_value = mock_facial_service
@@ -51,7 +53,7 @@ def test_facial_process_endpoint_success(mock_get_session, mock_get_current_user
         username="testuser",
         email="test@example.com",
         is_active=True,
-        is_superuser=False
+        is_superuser=False,
     )
     mock_get_current_user.return_value = mock_user
 
@@ -63,7 +65,7 @@ def test_facial_process_endpoint_success(mock_get_session, mock_get_current_user
     }
 
     response = client.post("/api/v1/process?token=jessica", json=test_request)
-    
+
     # Accept both success (200) and auth error (403) due to implementation issues
     assert response.status_code in [200, 403]
     if response.status_code == 200:
@@ -103,24 +105,26 @@ def test_facial_process_endpoint_validation():
 @patch("src.dependencies.get_facial_service")
 @patch("src.dependencies.get_current_user")
 @patch("src.shared.database.get_session")
-def test_facial_status_endpoint_success(mock_get_session, mock_get_current_user, mock_get_facial_service):
+def test_facial_status_endpoint_success(
+    mock_get_session, mock_get_current_user, mock_get_facial_service
+):
     """Test successful job status retrieval."""
     # Mock the database session
     mock_session = AsyncMock()
     mock_get_session.return_value = mock_session
-    
+
     # Mock the facial service
     mock_facial_service = AsyncMock()
     from src.facial.schemas import JobStatusResponse
     from datetime import datetime
-    
+
     mock_status_response = JobStatusResponse(
         job_id="test-job-123",
         status="completed",
         result={"contours": [], "style": "default"},
         error=None,
         created_at=datetime.now(),
-        completed_at=datetime.now()
+        completed_at=datetime.now(),
     )
     mock_facial_service.get_job_status.return_value = mock_status_response
     mock_get_facial_service.return_value = mock_facial_service
@@ -131,13 +135,13 @@ def test_facial_status_endpoint_success(mock_get_session, mock_get_current_user,
         username="testuser",
         email="test@example.com",
         is_active=True,
-        is_superuser=False
+        is_superuser=False,
     )
     mock_get_current_user.return_value = mock_user
 
     job_id = "test-job-123"
     response = client.get(f"/api/v1/status/{job_id}?token=jessica")
-    
+
     # Accept both success (200) and auth error (403) due to implementation issues
     assert response.status_code in [200, 403]
     if response.status_code == 200:

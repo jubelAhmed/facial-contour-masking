@@ -35,10 +35,13 @@ def test_auth_register_endpoint_success(client):
             "password": "TestPassword123",
         },
     )
-    
+
     # For now, just test that we get a response (not 404)
     # The 500 error indicates the endpoint exists but has implementation issues
-    assert response.status_code in [200, 500]  # Accept both success and internal error for now
+    assert response.status_code in [
+        200,
+        500,
+    ]  # Accept both success and internal error for now
 
 
 def test_auth_register_endpoint_validation_error(client):
@@ -51,7 +54,7 @@ def test_auth_register_endpoint_validation_error(client):
             # Missing email and password
         },
     )
-    
+
     # Should return validation error (422) or internal error (500) due to implementation issues
     assert response.status_code in [422, 500]
     data = response.json()
@@ -65,7 +68,7 @@ def test_auth_login_endpoint_success(mock_get_session, mock_get_auth_service, cl
     # Mock the database session
     mock_session = AsyncMock()
     mock_get_session.return_value = mock_session
-    
+
     # Mock the auth service
     mock_auth_service = AsyncMock()
     mock_user = User(
@@ -73,22 +76,21 @@ def test_auth_login_endpoint_success(mock_get_session, mock_get_auth_service, cl
         username="testuser",
         email="test@example.com",
         is_active=True,
-        is_superuser=False
+        is_superuser=False,
     )
     # Mock the methods properly
     mock_auth_service.authenticate_user = AsyncMock(return_value=mock_user)
     mock_auth_service.create_access_token = AsyncMock(return_value="mock_access_token")
-    mock_auth_service.create_refresh_token = AsyncMock(return_value="mock_refresh_token")
+    mock_auth_service.create_refresh_token = AsyncMock(
+        return_value="mock_refresh_token"
+    )
     mock_get_auth_service.return_value = mock_auth_service
 
     response = client.post(
         "/auth/login?token=jessica",
-        json={
-            "username": "testuser",
-            "password": "TestPassword123"
-        },
+        json={"username": "testuser", "password": "TestPassword123"},
     )
-    
+
     # Accept both success (200) and internal error (500) due to implementation issues
     assert response.status_code in [200, 500]
     if response.status_code == 200:
@@ -100,12 +102,14 @@ def test_auth_login_endpoint_success(mock_get_session, mock_get_auth_service, cl
 
 @patch("src.routers.auth.get_auth_service")
 @patch("src.shared.database.get_session")
-def test_auth_login_endpoint_invalid_credentials(mock_get_session, mock_get_auth_service, client):
+def test_auth_login_endpoint_invalid_credentials(
+    mock_get_session, mock_get_auth_service, client
+):
     """Test login with invalid credentials."""
     # Mock the database session
     mock_session = AsyncMock()
     mock_get_session.return_value = mock_session
-    
+
     # Mock the auth service
     mock_auth_service = AsyncMock()
     mock_auth_service.authenticate_user.return_value = None
@@ -113,12 +117,9 @@ def test_auth_login_endpoint_invalid_credentials(mock_get_session, mock_get_auth
 
     response = client.post(
         "/auth/login?token=jessica",
-        json={
-            "username": "testuser",
-            "password": "WrongPassword123"
-        },
+        json={"username": "testuser", "password": "WrongPassword123"},
     )
-    
+
     # Accept both 401 (unauthorized) and 500 (internal error) due to implementation issues
     assert response.status_code in [401, 500]
     data = response.json()
@@ -127,12 +128,14 @@ def test_auth_login_endpoint_invalid_credentials(mock_get_session, mock_get_auth
 
 @patch("src.routers.auth.get_auth_service")
 @patch("src.shared.database.get_session")
-def test_auth_login_endpoint_validation_error(mock_get_session, mock_get_auth_service, client):
+def test_auth_login_endpoint_validation_error(
+    mock_get_session, mock_get_auth_service, client
+):
     """Test login with invalid data format."""
     # Mock the database session
     mock_session = AsyncMock()
     mock_get_session.return_value = mock_session
-    
+
     mock_auth_service = AsyncMock()
     mock_get_auth_service.return_value = mock_auth_service
 
@@ -144,7 +147,7 @@ def test_auth_login_endpoint_validation_error(mock_get_session, mock_get_auth_se
             # Missing password
         },
     )
-    
+
     # Accept both 422 (validation error) and 500 (internal error) due to implementation issues
     assert response.status_code in [422, 500]
     data = response.json()
@@ -157,7 +160,7 @@ def test_auth_register_schema_validation():
     valid_data = {
         "username": "testuser",
         "email": "test@example.com",
-        "password": "TestPassword123"
+        "password": "TestPassword123",
     }
     user_create = UserCreate(**valid_data)
     assert user_create.username == "testuser"
@@ -167,9 +170,7 @@ def test_auth_register_schema_validation():
     # Test invalid email
     with pytest.raises(ValueError):
         UserCreate(
-            username="testuser",
-            email="invalid-email",
-            password="TestPassword123"
+            username="testuser", email="invalid-email", password="TestPassword123"
         )
 
     # Test short password
@@ -177,7 +178,7 @@ def test_auth_register_schema_validation():
         UserCreate(
             username="testuser",
             email="test@example.com",
-            password="123"  # Too short
+            password="123",  # Too short
         )
 
     # Test password without uppercase
@@ -185,17 +186,14 @@ def test_auth_register_schema_validation():
         UserCreate(
             username="testuser",
             email="test@example.com",
-            password="testpassword123"  # No uppercase
+            password="testpassword123",  # No uppercase
         )
 
 
 def test_auth_login_schema_validation():
     """Test UserLogin schema validation."""
     # Test valid data
-    valid_data = {
-        "username": "testuser",
-        "password": "TestPassword123"
-    }
+    valid_data = {"username": "testuser", "password": "TestPassword123"}
     user_login = UserLogin(**valid_data)
     assert user_login.username == "testuser"
     assert user_login.password == "TestPassword123"

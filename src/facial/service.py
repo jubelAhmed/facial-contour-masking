@@ -44,11 +44,14 @@ class FacialProcessingService:
         self.job_repository = job_repository
         self.hash_repository = hash_repository
         # self.processor = FacialSegmentationProcessor()  # Removed missing dependency
-    
+
     # ========== JOB MANAGEMENT METHODS ==========
-    
+
     async def create_processing_job(
-        self, user_id: int, request: ProcessingRequest, background_tasks: BackgroundTasks = None
+        self,
+        user_id: int,
+        request: ProcessingRequest,
+        background_tasks: BackgroundTasks = None,
     ) -> ProcessingResponse:
         """Create a new facial processing job."""
         try:
@@ -195,7 +198,7 @@ class FacialProcessingService:
         try:
             # Simplified processing - return mock result for now
             # TODO: Implement actual image processing logic
-            
+
             return {
                 "contours": [],
                 "style": request.style or "default",

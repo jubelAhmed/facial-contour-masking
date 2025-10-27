@@ -57,7 +57,7 @@ class BackgroundJobWorker:
         try:
             # Get pending jobs (this would need to be implemented in repository)
             pending_jobs = await self._get_pending_jobs()
-            
+
             for job in pending_jobs:
                 try:
                     await self._process_single_job(job)
@@ -162,17 +162,17 @@ class BackgroundJobWorker:
 
 class BackgroundWorkerManager:
     """Manager for background worker instance."""
-    
+
     def __init__(self):
         self._worker: Optional[BackgroundJobWorker] = None
         self._worker_task: Optional[asyncio.Task] = None
-    
+
     async def get_worker(self) -> BackgroundJobWorker:
         """Get the background worker instance."""
         if self._worker is None:
             raise RuntimeError("Background worker not initialized")
         return self._worker
-    
+
     async def start_worker(
         self,
         job_repository: IProcessingJobRepository,
@@ -183,7 +183,7 @@ class BackgroundWorkerManager:
         self._worker = BackgroundJobWorker(job_repository, hash_repository, db_manager)
         self._worker_task = asyncio.create_task(self._worker.start_worker())
         return self._worker
-    
+
     async def stop_worker(self) -> None:
         """Stop the background worker."""
         if self._worker:
@@ -211,7 +211,9 @@ async def start_background_worker(
     db_manager: DatabaseManager,
 ) -> BackgroundJobWorker:
     """Start the background worker."""
-    return await _worker_manager.start_worker(job_repository, hash_repository, db_manager)
+    return await _worker_manager.start_worker(
+        job_repository, hash_repository, db_manager
+    )
 
 
 async def stop_background_worker() -> None:

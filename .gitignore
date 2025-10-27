@@ -147,3 +147,10 @@ Thumbs.db
 # Project specific
 *.log
 test.txt
+# Generated files
+bandit-report.json
+safety-report.json
+coverage.xml
+htmlcov/
+*.pyc
+__pycache__/

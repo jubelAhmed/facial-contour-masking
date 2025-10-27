@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
         log_processing_step("Initializing database...")
         await create_db_and_tables()
         log_processing_step("Database initialization completed")
-        
+
         # Start background worker for job processing
         log_processing_step("Starting background job worker...")
         # Note: Background worker would need proper dependency injection
@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
         log_processing_step("Stopping background job worker...")
         await stop_background_worker()
         log_processing_step("Background job worker stopped")
-        
+
         await db_manager.close()
         log_processing_step("Database connections closed")
 
