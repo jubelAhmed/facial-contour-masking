@@ -3,6 +3,7 @@ Main application module that defines FastAPI routes and startup/shutdown events.
 Following FastAPI's recommended project structure.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
@@ -24,13 +25,36 @@ from src.shared.utils import log_startup_banner, log_processing_step
 from src.middleware.rate_limiting import limiter, rate_limit_exceeded_handler
 from src.middleware.security import SecurityHeadersMiddleware, RequestLoggingMiddleware, CORSSecurityMiddleware
 
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    if config.prometheus.enabled:
+        setup_prometheus(port=config.prometheus.port)
+        log_processing_step("Prometheus metrics server started")
+    
+    if config.db.use_database:
+        log_processing_step("Initializing database...")
+        await create_db_and_tables()
+        log_processing_step("Database initialization completed")
+    else:
+        log_processing_step("Database usage is disabled")
+    
+    yield
+    
+    # Shutdown
+    if config.db.use_database:
+        await db_manager.close()
+        log_processing_step("Database connections closed")
+
 # Initialize FastAPI app with global dependencies
 app = FastAPI(
     title=config.app_name, 
     description="API for processing facial images and generating contour masks",
     version=config.version,
     debug=config.debug,
-    dependencies=[Depends(get_query_token)]  # Global dependency
+    dependencies=[Depends(get_query_token)],  # Global dependency
+    lifespan=lifespan  # Modern lifespan handler
 )
 
 # Add security middleware (order matters!)
@@ -68,29 +92,6 @@ app.include_router(
 
 # Display startup banner
 log_startup_banner("Facial Contour Masking API", "1.0.0")
-
-# Setup Prometheus metrics server and database connections
-@app.on_event("startup")
-async def startup_event():
-    # Start Prometheus metrics server if enabled
-    if config.prometheus.enabled:
-        setup_prometheus(port=config.prometheus.port)
-        log_processing_step("Prometheus metrics server started")
-    
-    # Initialize database if enabled
-    if config.db.use_database:
-        log_processing_step("Initializing database...")
-        await create_db_and_tables()
-        log_processing_step("Database initialization completed")
-    else:
-        log_processing_step("Database usage is disabled")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-        # Close database connections if database was used
-        if config.db.use_database:
-            await db_manager.close()
-        log_processing_step("Database connections closed")
 
 @app.get("/")
 async def root():
