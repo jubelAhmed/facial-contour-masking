@@ -231,22 +231,32 @@ class AuthService:
             raise EmailTakenException()
 
 
-# ========== DEPENDENCY INJECTION FUNCTIONS ==========
+# ========== PRIVATE DEPENDENCY FUNCTIONS ==========
 
 
-def get_user_repository(session: SessionDep) -> IUserRepository:
-    """Get user repository instance."""
+def _get_user_repository(session: SessionDep) -> IUserRepository:
+    """Get user repository instance (private)."""
     return UserRepository(session)
 
 
-def get_token_repository(session: SessionDep) -> IRefreshTokenRepository:
-    """Get token repository instance."""
+def _get_token_repository(session: SessionDep) -> IRefreshTokenRepository:
+    """Get token repository instance (private)."""
     return RefreshTokenRepository(session)
 
 
+# ========== PUBLIC DEPENDENCY FUNCTIONS ==========
+
+
 def get_auth_service(
-    user_repo: IUserRepository = Depends(get_user_repository),
-    token_repo: IRefreshTokenRepository = Depends(get_token_repository),
+    user_repo: IUserRepository = Depends(_get_user_repository),
+    token_repo: IRefreshTokenRepository = Depends(_get_token_repository),
 ) -> AuthService:
     """Get auth service instance with dependency injection."""
     return AuthService(user_repo, token_repo)
+
+
+# ========== EXPORTS ==========
+__all__ = [
+    "AuthService",
+    "get_auth_service",
+]
