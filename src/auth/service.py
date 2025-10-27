@@ -9,9 +9,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status, Depends
 from src.core.database import SessionDep
-from src.auth.models import User, RefreshToken
-from src.auth.schemas import UserCreate, UserLogin, TokenRefresh
-from src.auth.security import (
+from src.auth.auth import (
+    User, RefreshToken, UserCreate, UserLogin, TokenRefresh,
     verify_password, get_password_hash, create_access_token, 
     create_refresh_token, verify_token, generate_token_hash
 )

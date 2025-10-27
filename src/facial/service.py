@@ -11,10 +11,9 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import SessionDep
-from src.facial.models import Cache, Job, ProcessingMetrics
-from src.facial.schemas import LandmarkPoint
+from src.facial.facial import ProcessingJob, PerceptualHash, ProcessingMetrics, LandmarkPoint
 from src.core.utils import logger
-from src.facial.exceptions import DatabaseException
+from src.core.exceptions import DatabaseError
 
 
 class DatabaseService:
@@ -37,28 +36,27 @@ class DatabaseService:
         try:
             # Check if job exists
             result = await self.session.execute(
-                select(Job).where(Job.id == job_id)
+                select(ProcessingJob).where(ProcessingJob.job_id == job_id)
             )
             job = result.scalar_one_or_none()
             
             if job:
                 # Update existing job
                 await self.session.execute(
-                    update(Job)
-                    .where(Job.id == job_id)
+                    update(ProcessingJob)
+                    .where(ProcessingJob.job_id == job_id)
                     .values(
                         status=status,
-                        cache_id=cache_id,
                         error_message=error_message,
                         updated_at=datetime.utcnow()
                     )
                 )
             else:
                 # Create new job
-                job = Job(
-                    id=job_id,
+                job = ProcessingJob(
+                    job_id=job_id,
+                    user_id=1,  # Default user ID
                     status=status,
-                    cache_id=cache_id,
                     error_message=error_message
                 )
                 self.session.add(job)
@@ -69,7 +67,7 @@ class DatabaseService:
         except SQLAlchemyError as e:
             await self.session.rollback()
             logger.error(f"Database error storing job status: {e}")
-            raise DatabaseException(f"Failed to store job status: {str(e)}")
+            raise DatabaseError(f"Failed to store job status: {str(e)}")
     
     async def get_job_with_result(self, job_id: str) -> Optional[Dict[str, Any]]:
         """Get job with result data from cache."""

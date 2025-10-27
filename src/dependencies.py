@@ -8,8 +8,7 @@ from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from src.core.database import SessionDep
 from src.auth.service import AuthService, get_auth_service
-from src.auth.models import User
-from src.auth.security import verify_token
+from src.auth.auth import User, verify_token
 from src.core.utils import logger
 
 # Security scheme

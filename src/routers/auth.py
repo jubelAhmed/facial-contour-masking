@@ -5,12 +5,11 @@ Authentication router for user registration, login, and token management.
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from src.core.database import SessionDep
 from src.auth.service import AuthService, get_auth_service
-from src.auth.schemas import (
+from src.auth.auth import (
     UserCreate, UserLogin, UserResponse, TokenResponse, 
-    TokenRefresh, PasswordChange, UserUpdate
+    TokenRefresh, PasswordChange, UserUpdate, User
 )
 from src.dependencies import get_current_user, get_current_superuser
-from src.auth.models import User
 from src.core.utils import log_request, log_response, logger
 from src.middleware.rate_limiting import auth_rate_limit, api_rate_limit, admin_rate_limit
 
