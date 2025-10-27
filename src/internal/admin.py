@@ -4,8 +4,8 @@ Admin router for system administration operations.
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from src.dependencies import get_current_superuser
-from src.auth.auth import User
-from src.core.utils import log_request, log_response, logger
+from src.auth.models import User
+from src.shared.utils import log_request, log_response, logger
 
 router = APIRouter()
 

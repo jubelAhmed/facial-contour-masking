@@ -5,9 +5,10 @@ Database session management and configuration for SQLAlchemy.
 from typing import AsyncGenerator, Annotated
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from fastapi import Depends
-from src.core.config import config
-from src.core.exceptions import InternalServerException
-from src.core.utils import logger
+from src.shared.config import config
+from src.shared.exceptions import InternalServerException
+from src.shared.utils import logger
+from src.shared.models import Base
 
 
 class DatabaseManager:
@@ -71,7 +72,6 @@ class DatabaseManager:
             raise InternalServerException("Database engine not initialized")
         
         try:
-            from src.core.models import Base
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
             logger.info("Database tables created successfully")

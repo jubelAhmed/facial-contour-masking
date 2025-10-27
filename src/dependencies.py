@@ -6,10 +6,11 @@ Following DRY principle - all dependencies in one place.
 from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from src.core.database import SessionDep
+from src.shared.database import SessionDep
 from src.auth.service import AuthService, get_auth_service
-from src.auth.auth import User, verify_token
-from src.core.utils import logger
+from src.auth.models import User
+from src.auth.utils import verify_token
+from src.shared.utils import logger
 
 # Security scheme
 security = HTTPBearer()

@@ -3,14 +3,16 @@ Authentication router for user registration, login, and token management.
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request
-from src.core.database import SessionDep
+from sqlalchemy import update, select, delete
+from src.shared.database import SessionDep
 from src.auth.service import AuthService, get_auth_service
-from src.auth.auth import (
+from src.auth.schemas import (
     UserCreate, UserLogin, UserResponse, TokenResponse, 
-    TokenRefresh, PasswordChange, UserUpdate, User
+    TokenRefresh, PasswordChange, UserUpdate
 )
+from src.auth.models import User
 from src.dependencies import get_current_user, get_current_superuser
-from src.core.utils import log_request, log_response, logger
+from src.shared.utils import log_request, log_response, logger
 from src.middleware.rate_limiting import auth_rate_limit, api_rate_limit, admin_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -177,7 +179,6 @@ async def update_current_user(
             return UserResponse(**current_user.to_dict())
         
         # Update user in database
-        from sqlalchemy import update
         await auth_service.session.execute(
             update(User)
             .where(User.id == current_user.id)
@@ -220,7 +221,6 @@ async def change_password(
         
         # Update password
         new_hashed_password = auth_service.get_password_hash(password_data.new_password)
-        from sqlalchemy import update
         await auth_service.session.execute(
             update(User)
             .where(User.id == current_user.id)
@@ -256,7 +256,6 @@ async def list_users(
     log_request(request, {"user_id": current_user.id})
     
     try:
-        from sqlalchemy import select
         result = await auth_service.session.execute(select(User))
         users = result.scalars().all()
         
@@ -299,7 +298,6 @@ async def delete_user(
             )
         
         # Delete user
-        from sqlalchemy import delete
         await auth_service.session.execute(
             delete(User).where(User.id == user_id)
         )

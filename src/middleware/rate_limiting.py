@@ -6,8 +6,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request, HTTPException, status
-from src.core.config import config
-from src.core.utils import logger
+from src.shared.config import config
+from src.shared.utils import logger
 
 # Initialize limiter with Redis backend (fallback to memory)
 try:

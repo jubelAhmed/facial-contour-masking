@@ -18,9 +18,9 @@ from src.internal import admin
 from src.routers import auth, facial
 
 # Import core modules
-from src.core.config import config
-from src.core.database import create_db_and_tables
-from src.core.utils import log_startup_banner, log_processing_step
+from src.shared.config import config
+from src.shared.database import create_db_and_tables, db_manager
+from src.shared.utils import log_startup_banner, log_processing_step
 from src.middleware.rate_limiting import limiter, rate_limit_exceeded_handler
 from src.middleware.security import SecurityHeadersMiddleware, RequestLoggingMiddleware, CORSSecurityMiddleware
 
@@ -87,10 +87,9 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    # Close database connections if database was used
-    if config.db.use_database:
-        from src.core.database import db_manager
-        await db_manager.close()
+        # Close database connections if database was used
+        if config.db.use_database:
+            await db_manager.close()
         log_processing_step("Database connections closed")
 
 @app.get("/")

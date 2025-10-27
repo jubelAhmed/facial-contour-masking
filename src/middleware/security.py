@@ -6,7 +6,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response as StarletteResponse
-from src.core.utils import logger
+from src.shared.utils import logger
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

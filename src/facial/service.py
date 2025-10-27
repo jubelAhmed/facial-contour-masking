@@ -1,241 +1,255 @@
 """
-Service layer for facial processing operations.
+Facial processing service following Service Layer pattern.
+Uses Repository pattern for data access (Dependency Injection).
 """
 
 from typing import Dict, Any, Optional, List
 import json
 import hashlib
+import uuid
 from datetime import datetime, timedelta
-from sqlalchemy import select, update, delete
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
-from src.core.database import SessionDep
-from src.facial.facial import ProcessingJob, PerceptualHash, ProcessingMetrics, LandmarkPoint
-from src.core.utils import logger
-from src.core.exceptions import DatabaseError
+from fastapi import HTTPException, status, Depends
+from src.facial.models import ProcessingJob, PerceptualHash, ProcessingMetrics
+from src.facial.schemas import (
+    LandmarkPoint, ProcessingRequest, ProcessingResponse, JobStatusResponse
+)
+from src.facial.exceptions import (
+    FacialProcessingException, InvalidImageException, InsufficientLandmarksException,
+    JobNotFoundException
+)
+from src.facial.constants import ProcessingStatus, OutputFormat, RegionType
+from src.facial.repository import (
+    IProcessingJobRepository, ProcessingJobRepository,
+    IPerceptualHashRepository, PerceptualHashRepository
+)
+from src.shared.utils import logger
 
 
-class DatabaseService:
-    """Database service layer with modern session dependency pattern."""
+class FacialProcessingService:
+    """Facial processing service following Service Layer pattern."""
     
-    def __init__(self, session: SessionDep):
-        """Initialize database service with session dependency."""
-        self.session = session
+    def __init__(
+        self, 
+        job_repository: IProcessingJobRepository, 
+        hash_repository: IPerceptualHashRepository
+    ):
+        """Initialize facial processing service with repositories (Dependency Injection)."""
+        self.job_repository = job_repository
+        self.hash_repository = hash_repository
+        self.processor = FacialSegmentationProcessor()
     
     # ========== JOB MANAGEMENT METHODS ==========
     
-    async def store_job_status(
-        self, 
-        job_id: str, 
-        status: str, 
-        cache_id: Optional[int] = None,
-        error_message: Optional[str] = None
-    ) -> None:
-        """Store or update job status."""
+    async def create_processing_job(self, user_id: int, request: ProcessingRequest) -> ProcessingResponse:
+        """Create a new facial processing job."""
         try:
-            # Check if job exists
-            result = await self.session.execute(
-                select(ProcessingJob).where(ProcessingJob.job_id == job_id)
+            # Business logic validation
+            await self._validate_processing_request(request)
+            
+            # Generate job ID
+            job_id = str(uuid.uuid4())
+            
+            # Create job in database
+            job = await self.job_repository.create_job(
+                job_id=job_id,
+                user_id=user_id,
+                input_data=json.dumps({
+                    "landmarks": [{"x": p.x, "y": p.y} for p in request.landmarks],
+                    "output_format": request.output_format,
+                    "style": request.style
+                })
             )
-            job = result.scalar_one_or_none()
             
-            if job:
-                # Update existing job
-                await self.session.execute(
-                    update(ProcessingJob)
-                    .where(ProcessingJob.job_id == job_id)
-                    .values(
-                        status=status,
-                        error_message=error_message,
-                        updated_at=datetime.utcnow()
-                    )
-                )
-            else:
-                # Create new job
-                job = ProcessingJob(
-                    job_id=job_id,
-                    user_id=1,  # Default user ID
-                    status=status,
-                    error_message=error_message
-                )
-                self.session.add(job)
+            # Start processing asynchronously (in real app, use background tasks)
+            await self._process_job_async(job_id, request)
             
-            await self.session.commit()
-            logger.info(f"Job {job_id} status updated to {status}")
+            return ProcessingResponse(
+                job_id=job_id,
+                status="pending",
+                message="Processing job created successfully"
+            )
             
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"Database error storing job status: {e}")
-            raise DatabaseError(f"Failed to store job status: {str(e)}")
+        except (InvalidImageException, InsufficientLandmarksException):
+            raise
+        except Exception as e:
+            logger.error(f"Error creating processing job: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create processing job"
+            )
     
-    async def get_job_with_result(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Get job with result data from cache."""
+    async def get_job_status(self, job_id: str) -> JobStatusResponse:
+        """Get job status and result."""
         try:
-            result = await self.session.execute(
-                select(Job)
-                .options(selectinload(Job.cache_entry))
-                .where(Job.id == job_id)
-            )
-            job = result.scalar_one_or_none()
-            
+            job = await self.job_repository.get_job_by_id(job_id)
             if not job:
-                return None
+                raise JobNotFoundException()
             
-            job_data = job.to_dict()
+            result = None
+            if job.output_data:
+                result = json.loads(job.output_data)
             
-            # Add result data if available
-            if job.cache_entry:
-                job_data["result"] = job.cache_entry.result
-            
-            return job_data
-            
-        except SQLAlchemyError as e:
-            logger.error(f"Database error getting job: {e}")
-            raise DatabaseException(f"Failed to get job: {str(e)}")
-    
-    async def get_job_status(self, job_id: str) -> Optional[str]:
-        """Get job status."""
-        try:
-            result = await self.session.execute(
-                select(Job.status).where(Job.id == job_id)
+            return JobStatusResponse(
+                job_id=job_id,
+                status=job.status,
+                result=result,
+                error=job.error_message,
+                created_at=job.created_at,
+                completed_at=job.completed_at
             )
-            return result.scalar_one_or_none()
             
-        except SQLAlchemyError as e:
-            logger.error(f"Database error getting job status: {e}")
-            raise DatabaseException(f"Failed to get job status: {str(e)}")
+        except JobNotFoundException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting job status: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to get job status"
+            )
+    
+    async def get_user_jobs(self, user_id: int) -> List[JobStatusResponse]:
+        """Get all jobs for a user."""
+        try:
+            jobs = await self.job_repository.get_user_jobs(user_id)
+            
+            return [
+                JobStatusResponse(
+                    job_id=job.job_id,
+                    status=job.status,
+                    result=json.loads(job.output_data) if job.output_data else None,
+                    error=job.error_message,
+                    created_at=job.created_at,
+                    completed_at=job.completed_at
+                )
+                for job in jobs
+            ]
+            
+        except Exception as e:
+            logger.error(f"Error getting user jobs: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to get user jobs"
+            )
+    
+    async def delete_job(self, job_id: str) -> bool:
+        """Delete a processing job."""
+        try:
+            return await self.job_repository.delete_job(job_id)
+        except Exception as e:
+            logger.error(f"Error deleting job: {e}")
+            return False
+    
+    # ========== PROCESSING METHODS ==========
+    
+    async def _process_job_async(self, job_id: str, request: ProcessingRequest) -> None:
+        """Process job asynchronously (business logic)."""
+        try:
+            # Update job status to processing
+            await self.job_repository.update_job_status(job_id, "processing")
+            
+            # Check cache first
+            cache_key = self._generate_cache_key(request)
+            cached_result = await self.hash_repository.get_by_hash(cache_key)
+            
+            if cached_result:
+                # Use cached result
+                result = json.loads(cached_result.result_data)
+                await self.hash_repository.update_last_accessed(cache_key)
+                logger.info(f"Using cached result for job {job_id}")
+            else:
+                # Process image
+                result = await self._process_image(request)
+                
+                # Cache result
+                await self.hash_repository.create_hash(
+                    cache_key, 
+                    json.dumps(result)
+                )
+                logger.info(f"Processed and cached result for job {job_id}")
+            
+            # Update job with result
+            await self.job_repository.update_job_status(
+                job_id, 
+                "completed", 
+                output_data=json.dumps(result)
+            )
+            
+        except Exception as e:
+            logger.error(f"Error processing job {job_id}: {e}")
+            await self.job_repository.update_job_status(
+                job_id, 
+                "failed", 
+                error_message=str(e)
+            )
+    
+    async def _process_image(self, request: ProcessingRequest) -> Dict[str, Any]:
+        """Process facial image (business logic)."""
+        try:
+            # Get style configuration
+            style_config = StyleConfigFactory.create_style_config(request.style or "default")
+            self.processor.style_config = style_config
+            
+            # Process the image
+            result = self.processor.process_image(request.image_data, request.landmarks)
+            
+            return {
+                "contours": result["contours"],
+                "style": result["style"],
+                "regions": result["regions"],
+                "output_format": request.output_format,
+                "processed_at": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing image: {e}")
+            raise FacialProcessingException(f"Image processing failed: {str(e)}")
     
     # ========== CACHE MANAGEMENT METHODS ==========
     
-    async def store_cache_result(
-        self, 
-        input_hash: str, 
-        result: Dict[str, Any]
-    ) -> int:
-        """Store processing result in cache."""
+    async def cleanup_old_cache(self, days: int = 30) -> int:
+        """Clean up old cache entries."""
         try:
-            # Check if cache entry already exists
-            result_query = await self.session.execute(
-                select(Cache).where(Cache.input_hash == input_hash)
-            )
-            cache_entry = result_query.scalar_one_or_none()
-            
-            if cache_entry:
-                # Update existing cache entry
-                await self.session.execute(
-                    update(Cache)
-                    .where(Cache.input_hash == input_hash)
-                    .values(result=result)
-                )
-                cache_id = cache_entry.id
-            else:
-                # Create new cache entry
-                cache_entry = Cache(
-                    input_hash=input_hash,
-                    result=result
-                )
-                self.session.add(cache_entry)
-                await self.session.flush()  # Get the ID
-                cache_id = cache_entry.id
-            
-            await self.session.commit()
-            logger.info(f"Cache result stored with ID {cache_id}")
-            return cache_id
-            
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"Database error storing cache result: {e}")
-            raise DatabaseException(f"Failed to store cache result: {str(e)}")
+            return await self.hash_repository.cleanup_old_hashes(days)
+        except Exception as e:
+            logger.error(f"Error cleaning up cache: {e}")
+            return 0
     
-    async def get_cache_result(self, input_hash: str) -> Optional[Dict[str, Any]]:
-        """Get cached processing result."""
-        try:
-            result = await self.session.execute(
-                select(Cache).where(Cache.input_hash == input_hash)
-            )
-            cache_entry = result.scalar_one_or_none()
-            
-            if cache_entry:
-                return cache_entry.result
-            
-            return None
-            
-        except SQLAlchemyError as e:
-            logger.error(f"Database error getting cache result: {e}")
-            raise DatabaseException(f"Failed to get cache result: {str(e)}")
+    # ========== PRIVATE HELPER METHODS ==========
     
-    # ========== METRICS MANAGEMENT METHODS ==========
+    async def _validate_processing_request(self, request: ProcessingRequest) -> None:
+        """Validate processing request (business logic)."""
+        if not request.image_data:
+            raise InvalidImageException("No image data provided")
+        
+        if not validate_image_data(request.image_data):
+            raise InvalidImageException("Invalid image format")
+        
+        if len(request.landmarks) < 68:
+            raise InsufficientLandmarksException("At least 68 landmarks required")
     
-    async def store_processing_metrics(
-        self,
-        job_id: str,
-        processing_time_ms: int,
-        image_size_bytes: Optional[int] = None,
-        contour_count: Optional[int] = None,
-        generator_type: Optional[str] = None
-    ) -> None:
-        """Store processing metrics."""
-        try:
-            metrics = ProcessingMetrics(
-                job_id=job_id,
-                processing_time_ms=processing_time_ms,
-                image_size_bytes=image_size_bytes,
-                contour_count=contour_count,
-                generator_type=generator_type
-            )
-            
-            self.session.add(metrics)
-            await self.session.commit()
-            logger.info(f"Processing metrics stored for job {job_id}")
-            
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"Database error storing metrics: {e}")
-            raise DatabaseException(f"Failed to store metrics: {str(e)}")
-    
-    # ========== UTILITY METHODS ==========
-    
-    def generate_input_hash(
-        self, 
-        image_data: str, 
-        landmarks: List[LandmarkPoint], 
-        segmentation_map: str
-    ) -> str:
-        """Generate hash for input data."""
-        # Create a string representation of the input
-        input_string = f"{image_data}:{landmarks}:{segmentation_map}"
-        return hashlib.sha256(input_string.encode()).hexdigest()
-    
-    async def cleanup_old_data(self, days: int = 30) -> None:
-        """Clean up old cache and job data."""
-        try:
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
-            
-            # Delete old cache entries
-            await self.session.execute(
-                delete(Cache).where(Cache.created_at < cutoff_date)
-            )
-            
-            # Delete old jobs
-            await self.session.execute(
-                delete(Job).where(Job.created_at < cutoff_date)
-            )
-            
-            # Delete old metrics
-            await self.session.execute(
-                delete(ProcessingMetrics).where(ProcessingMetrics.created_at < cutoff_date)
-            )
-            
-            await self.session.commit()
-            logger.info(f"Cleaned up data older than {days} days")
-            
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"Database error during cleanup: {e}")
-            raise DatabaseException(f"Failed to cleanup old data: {str(e)}")
+    def _generate_cache_key(self, request: ProcessingRequest) -> str:
+        """Generate cache key for request."""
+        # Create hash from landmarks and style
+        landmarks_str = json.dumps([{"x": p.x, "y": p.y} for p in request.landmarks])
+        style_str = request.style or "default"
+        
+        content = f"{landmarks_str}:{style_str}"
+        return hashlib.sha256(content.encode()).hexdigest()
 
 
-def get_database_service(session: SessionDep) -> DatabaseService:
-    """Get database service with session dependency."""
-    return DatabaseService(session)
+# ========== DEPENDENCY INJECTION FUNCTIONS ==========
+
+def get_processing_job_repository(session) -> IProcessingJobRepository:
+    """Get processing job repository instance."""
+    return ProcessingJobRepository(session)
+
+def get_perceptual_hash_repository(session) -> IPerceptualHashRepository:
+    """Get perceptual hash repository instance."""
+    return PerceptualHashRepository(session)
+
+def get_facial_processing_service(
+    job_repo: IProcessingJobRepository = Depends(get_processing_job_repository),
+    hash_repo: IPerceptualHashRepository = Depends(get_perceptual_hash_repository)
+) -> FacialProcessingService:
+    """Get facial processing service instance with dependency injection."""
+    return FacialProcessingService(job_repo, hash_repo)
