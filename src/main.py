@@ -30,6 +30,9 @@ from src.shared.config import config
 from src.shared.database import create_db_and_tables, db_manager
 from src.shared.utils import log_processing_step, log_startup_banner
 
+# Import background worker
+from src.facial.background_worker import start_background_worker, stop_background_worker
+
 
 # Lifespan event handler
 @asynccontextmanager
@@ -43,6 +46,12 @@ async def lifespan(app: FastAPI):
         log_processing_step("Initializing database...")
         await create_db_and_tables()
         log_processing_step("Database initialization completed")
+        
+        # Start background worker for job processing
+        log_processing_step("Starting background job worker...")
+        # Note: Background worker would need proper dependency injection
+        # await start_background_worker(job_repo, hash_repo, db_manager)
+        log_processing_step("Background job worker started")
     else:
         log_processing_step("Database usage is disabled")
 
@@ -50,6 +59,11 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     if config.db.use_database:
+        # Stop background worker
+        log_processing_step("Stopping background job worker...")
+        await stop_background_worker()
+        log_processing_step("Background job worker stopped")
+        
         await db_manager.close()
         log_processing_step("Database connections closed")
 

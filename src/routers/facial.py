@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any, Dict, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
 from src.auth.models import User
 from src.dependencies import get_current_user, get_optional_current_user, get_facial_service
@@ -28,8 +28,8 @@ async def health_check():
 @router.get("/status/{job_id}")
 @status_rate_limit()
 async def get_job_status(
-    job_id: str, 
-    request: Request, 
+    job_id: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     facial_service: FacialProcessingService = Depends(get_facial_service)
 ):
@@ -51,20 +51,20 @@ async def get_job_status(
 @processing_rate_limit()
 async def process_image(
     processing_request: ProcessingRequest,
-    request: Request, 
+    background_tasks: BackgroundTasks,
+    request: Request,
     current_user: User = Depends(get_current_user),
     facial_service: FacialProcessingService = Depends(get_facial_service)
 ):
-    """Process facial image using facial processing service."""
+    """Process facial image using facial processing service with background tasks."""
     logger.info(f"Image processing requested by user {current_user.username}")
 
     try:
-        # Create processing job using the service
+        # Create processing job using the service (returns immediately)
         result = await facial_service.create_processing_job(
             user_id=current_user.id,
-            image_data=processing_request.image_data,
-            output_format=processing_request.output_format,
-            options=processing_request.options
+            request=processing_request,
+            background_tasks=background_tasks
         )
         return result
     except Exception as e:
@@ -78,7 +78,7 @@ async def process_image(
 @router.post("/test")
 @processing_rate_limit()
 async def test_endpoint(
-    request: Request, 
+    request: Request,
     current_user: User = Depends(get_current_user),
     facial_service: FacialProcessingService = Depends(get_facial_service)
 ):

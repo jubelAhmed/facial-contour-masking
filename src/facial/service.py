@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List
 
-from fastapi import Depends, HTTPException, status
+from fastapi import BackgroundTasks, Depends, HTTPException, status
 
 from src.facial.exceptions import (
     FacialProcessingException,
@@ -44,11 +44,11 @@ class FacialProcessingService:
         self.job_repository = job_repository
         self.hash_repository = hash_repository
         # self.processor = FacialSegmentationProcessor()  # Removed missing dependency
-
+    
     # ========== JOB MANAGEMENT METHODS ==========
-
+    
     async def create_processing_job(
-        self, user_id: int, request: ProcessingRequest
+        self, user_id: int, request: ProcessingRequest, background_tasks: BackgroundTasks = None
     ) -> ProcessingResponse:
         """Create a new facial processing job."""
         try:
@@ -71,8 +71,12 @@ class FacialProcessingService:
                 ),
             )
 
-            # Start processing asynchronously (in real app, use background tasks)
-            await self._process_job_async(job_id, request)
+            # Start processing asynchronously using background tasks
+            if background_tasks:
+                background_tasks.add_task(self._process_job_async, job_id, request)
+            else:
+                # Fallback to synchronous processing if no background tasks
+                await self._process_job_async(job_id, request)
 
             return ProcessingResponse(
                 job_id=job_id,

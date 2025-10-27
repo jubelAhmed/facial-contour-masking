@@ -8,7 +8,8 @@ A modern, enterprise-grade FastAPI application for processing facial images and 
 - **Facial Image Processing**: Accepts facial images with landmarks and segmentation maps
 - **SVG Generation**: Returns SVG contour masks for specific facial regions
 - **Face Alignment**: Handles autorotation and cropping of faces
-- **Asynchronous Processing**: Uses background tasks for non-blocking API calls
+- **Background Job Processing**: Asynchronous image processing with job status tracking
+- **Real-time Status Updates**: Poll job status and retrieve results when ready
 
 ### Enterprise Features
 - **🔐 JWT Authentication**: Secure user authentication with access/refresh tokens
@@ -25,19 +26,19 @@ A modern, enterprise-grade FastAPI application for processing facial images and 
 ```
 ┌─────────────┐     ┌───────────────┐     ┌───────────────┐
 │ HTTP Client │────▶│ FastAPI       │────▶│ Background    │
-│             │◀────│ Endpoint      │     │ Task Worker   │
+│             │◀────│ API Endpoint  │     │ Job Worker    │
 └─────────────┘     └───────────────┘     └───────┬───────┘
                            │                      │
                            ▼                      ▼
                     ┌───────────────┐     ┌───────────────┐
-                    │ PostgreSQL DB │◀────│ Image         │
-                    │ (Job Status)  │     │ Processor     │
+                    │ Database      │◀────│ Image         │
+                    │ (Job Queue)   │     │ Processor     │
                     └───────────────┘     └───────────────┘
                            ▲                      │
                            │                      ▼
                     ┌───────────────┐     ┌───────────────┐
                     │ Perceptual    │◀────│ SVG Generator │
-                    │ Hash Cache    │     │               │
+                    │ Hash Cache    │     │ & Output      │
                     └───────────────┘     └───────────────┘
 ```
 
@@ -83,6 +84,7 @@ opnecv_image_processing/
 │   │   ├── schemas.py        # Request/response schemas
 │   │   ├── service.py        # Processing logic
 │   │   ├── repository.py     # Data access layer
+│   │   ├── background_worker.py # Background job processing
 │   │   ├── constants.py      # Enums & constants
 │   │   ├── exceptions.py     # Custom exceptions
 │   │   ├── generators/       # Output generators (SVG, PNG, JSON)
@@ -258,7 +260,7 @@ Refresh access token
 ### Processing Endpoints
 
 #### POST /api/v1/process
-Submit facial image for processing
+Submit facial image for background processing
 ```json
 {
   "image_data": "base64_encoded_image",
@@ -268,19 +270,54 @@ Submit facial image for processing
 }
 ```
 
+**Response:**
+```json
+{
+  "job_id": "uuid",
+  "status": "pending",
+  "message": "Processing job created successfully"
+}
+```
+
 #### GET /api/v1/status/{job_id}
-Check processing status
+Check background job status
 ```json
 {
   "job_id": "uuid",
   "status": "completed",
   "result": {
+    "contours": [...],
+    "style": "default",
     "regions": [...],
     "output_format": "svg",
-    "style": "default"
-  }
+    "processed_at": "2024-01-01T12:00:00Z"
+  },
+  "error": null,
+  "created_at": "2024-01-01T12:00:00Z",
+  "completed_at": "2024-01-01T12:00:05Z"
 }
 ```
+
+**Job Status Values:**
+- `pending`: Job queued for processing
+- `processing`: Currently being processed
+- `completed`: Successfully finished
+- `failed`: Processing failed
+
+### Background Job Processing
+
+The API uses FastAPI's BackgroundTasks for asynchronous image processing:
+
+1. **Submit Job**: POST `/api/v1/process` returns immediately with job ID
+2. **Background Processing**: Image processing happens asynchronously
+3. **Status Polling**: GET `/api/v1/status/{job_id}` to check progress
+4. **Result Retrieval**: Download processed results when status is "completed"
+
+**Benefits:**
+- Non-blocking API responses
+- Scalable concurrent processing
+- Smart caching prevents duplicate work
+- Real-time status updates
 
 ### Admin Endpoints
 
@@ -315,8 +352,8 @@ alembic downgrade -1
 ### Database Models
 - **Users**: User authentication and profiles
 - **RefreshTokens**: JWT refresh token management
-- **Cache**: Perceptual hash caching
-- **Jobs**: Processing job status
+- **ProcessingJobs**: Background job status and results
+- **PerceptualHash**: Smart caching for processed images
 - **ProcessingMetrics**: Performance metrics
 
 ## 🛠️ Development
@@ -339,24 +376,40 @@ uv pip install -e ".[dev]"
 # Run tests
 pytest
 
-# Format code
-black src/
-isort src/
+# Format and lint code (Ruff handles both)
+ruff check src/ --fix
+ruff format src/
 
 # Type checking
 mypy src/
-
-# Linting
-ruff check src/
 ```
+
+## 🧪 Testing
 
 ### Running Tests
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=src
+uv run pytest --cov=src
+
+# Run specific test file
+uv run pytest tests/test_auth.py
+
+# Run with verbose output
+uv run pytest -v
+```
+
+### Test Structure
+```
+tests/
+├── conftest.py              # Test configuration
+├── test_main.py             # Main app tests
+├── test_auth.py             # Authentication tests
+├── test_facial.py           # Facial processing tests
+├── test_facial_generators.py # Generator tests
+└── test_facial_service.py   # Service tests
 ```
 
 ## 🔒 Security Features
@@ -398,7 +451,8 @@ pytest --cov=src
 
 ### Performance Optimization
 - **Database**: PostgreSQL with connection pooling
-- **Caching**: Redis for rate limiting and session storage
+- **Background Jobs**: Asynchronous image processing with FastAPI BackgroundTasks
+- **Caching**: Redis for rate limiting and perceptual hash caching
 - **Async Processing**: Non-blocking I/O operations
 - **Monitoring**: Prometheus metrics and Grafana dashboards
 - **Rate Limiting**: Distributed rate limiting with Redis
