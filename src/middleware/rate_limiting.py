@@ -2,47 +2,45 @@
 Rate limiting configuration using slowapi library.
 """
 
+from fastapi import HTTPException, Request, status
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from fastapi import Request, HTTPException, status
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
+from starlette.responses import PlainTextResponse
+
 from src.shared.config import config
 from src.shared.utils import logger
 
-# Initialize limiter with Redis backend (fallback to memory)
-try:
-    # Try Redis first
-    limiter = Limiter(
-        key_func=get_remote_address,
-        storage_uri="redis://localhost:6379",
-        default_limits=[f"{config.rate_limit.requests_per_hour}/hour"]
-    )
-    logger.info("Rate limiting initialized with Redis backend")
-except Exception as e:
-    # Fallback to in-memory storage
-    limiter = Limiter(
-        key_func=get_remote_address,
-        default_limits=[f"{config.rate_limit.requests_per_hour}/hour"]
-    )
-    logger.warning(f"Redis not available, using in-memory rate limiting: {e}")
+
+# Initialize limiter with proper configuration
+def create_limiter():
+    """Create limiter with Redis backend (fallback to memory)."""
+    rate_str = f"{config.rate_limit.requests_per_hour}/{config.rate_limit.window_seconds} second"
+    limiter_kwargs = {"key_func": get_remote_address, "default_limits": [rate_str]}
+
+    # Add Redis storage if configured
+    if config.rate_limit.redis_url:
+        limiter_kwargs["storage_uri"] = config.rate_limit.redis_url
+        logger.info(
+            f"Rate limiting initialized with Redis: {config.rate_limit.redis_url}"
+        )
+    else:
+        logger.info("Rate limiting initialized with in-memory storage")
+
+    return Limiter(**limiter_kwargs)
+
+
+# Create limiter instance
+limiter = create_limiter()
 
 
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
-    """Custom rate limit exceeded handler."""
-    response = HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail={
-            "detail": "Rate limit exceeded",
-            "error_code": "RATE_LIMIT_EXCEEDED",
-            "rate_limit": {
-                "limit": exc.detail.get("limit", 0),
-                "remaining": exc.detail.get("remaining", 0),
-                "reset_time": exc.detail.get("reset_time", 0),
-                "retry_after": exc.detail.get("retry_after", 0)
-            }
-        }
-    )
-    return response
+    """Custom rate limit exceeded handler with proper headers."""
+    retry_after = exc.detail.get("remaining", 0) if hasattr(exc, "detail") else 0
+    headers = {"Retry-After": str(retry_after)} if retry_after else {}
+
+    return PlainTextResponse("Too Many Requests", status_code=429, headers=headers)
 
 
 # Rate limit decorators for different endpoint types
@@ -53,7 +51,7 @@ def auth_rate_limit():
 
 def api_rate_limit():
     """Rate limit for general API endpoints."""
-    return limiter.limit("100/hour")
+    return limiter.limit(f"{config.rate_limit.requests_per_hour}/hour")
 
 
 def processing_rate_limit():
@@ -69,3 +67,8 @@ def status_rate_limit():
 def admin_rate_limit():
     """Rate limit for admin endpoints."""
     return limiter.limit("50/hour")
+
+
+def burst_rate_limit():
+    """Rate limit for burst requests."""
+    return limiter.limit(f"{config.rate_limit.burst_limit}/minute")

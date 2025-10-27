@@ -7,6 +7,7 @@ from enum import Enum
 
 class ProcessingStatus(str, Enum):
     """Processing status values."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -15,6 +16,7 @@ class ProcessingStatus(str, Enum):
 
 class OutputFormat(str, Enum):
     """Output format types."""
+
     SVG = "svg"
     PNG = "png"
     JSON = "json"
@@ -22,6 +24,7 @@ class OutputFormat(str, Enum):
 
 class RegionType(str, Enum):
     """Face region types."""
+
     FOREHEAD = "forehead"
     LEFT_EYE = "left_eye"
     RIGHT_EYE = "right_eye"

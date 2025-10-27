@@ -2,15 +2,16 @@
 Core utility functions and logging setup.
 """
 
-from rich.console import Console
-from rich.logging import RichHandler
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
-from rich.traceback import install
 import logging
 import sys
 import time
+
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+from rich.traceback import install
 
 # Install rich traceback handler
 install()
@@ -23,7 +24,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
     datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True, console=console)]
+    handlers=[RichHandler(rich_tracebacks=True, console=console)],
 )
 
 logger = logging.getLogger("facial_api")
@@ -31,9 +32,13 @@ logger = logging.getLogger("facial_api")
 
 def log_startup_banner(app_name: str, version: str):
     """Display a startup banner in the console."""
-    console.print(Panel.fit(f"[bold blue]{app_name}[/bold blue] [green]v{version}[/green]", 
-                           subtitle="Facial Contour Masking API", 
-                           border_style="green"))
+    console.print(
+        Panel.fit(
+            f"[bold blue]{app_name}[/bold blue] [green]v{version}[/green]",
+            subtitle="Facial Contour Masking API",
+            border_style="green",
+        )
+    )
 
 
 def log_request(request, data=None):
@@ -41,7 +46,9 @@ def log_request(request, data=None):
     client_ip = request.client.host if request.client else "unknown"
     method = request.method
     endpoint = request.url.path
-    logger.info(f"Request: [bold]{method.upper()}[/bold] {endpoint} from [italic]{client_ip}[/italic]")
+    logger.info(
+        f"Request: [bold]{method.upper()}[/bold] {endpoint} from [italic]{client_ip}[/italic]"
+    )
     if data:
         # Log only essential data, not the entire request body
         log_data = {}
@@ -58,7 +65,9 @@ def log_response(request, response_data):
     endpoint = request.url.path
     status_code = 200  # Default for successful response
     color = "green" if status_code < 400 else "red"
-    logger.info(f"Response: [bold]{method.upper()}[/bold] {endpoint} → [bold {color}]{status_code}[/bold {color}]")
+    logger.info(
+        f"Response: [bold]{method.upper()}[/bold] {endpoint} → [bold {color}]{status_code}[/bold {color}]"
+    )
 
 
 def log_job_status(job_id: str, status: str, progress: float = 0.0, error: str = None):
@@ -68,11 +77,13 @@ def log_job_status(job_id: str, status: str, progress: float = 0.0, error: str =
         "pending": "yellow",
         "processing": "blue",
         "completed": "green",
-        "failed": "red"
+        "failed": "red",
     }
     color = color_map.get(status, "white")
     error_str = f" - Error: {error}" if error else ""
-    logger.info(f"Job [bold]{job_id}[/bold]: [bold {color}]{status}[/bold {color}]{error_str}")
+    logger.info(
+        f"Job [bold]{job_id}[/bold]: [bold {color}]{status}[/bold {color}]{error_str}"
+    )
 
 
 def log_processing_step(step_name: str, success: bool = True):
@@ -95,20 +106,20 @@ def log_job_table(jobs):
     table.add_column("Status", style="green")
     table.add_column("Created At", style="yellow")
     table.add_column("Updated At", style="yellow")
-    
+
     for job_id, job in jobs.items():
         status_style = {
             "pending": "yellow",
             "processing": "blue",
             "completed": "green",
-            "failed": "red"
+            "failed": "red",
         }.get(job.status, "white")
-        
+
         table.add_row(
             job_id,
             f"[{status_style}]{job.status}[/{status_style}]",
             job.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            job.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+            job.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
         )
-    
+
     console.print(table)
