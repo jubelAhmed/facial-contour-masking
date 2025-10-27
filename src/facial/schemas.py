@@ -1,50 +1,89 @@
 """
-Pydantic schemas for facial processing API.
+Facial processing Pydantic schemas for request/response validation.
 """
 
-from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-# Type alias for mask contours
-MaskContours = Dict[int, List[Tuple[int, int]]]
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class LandmarkPoint(BaseModel):
-    """Facial landmark point."""
-    x: float
-    y: float
+    """Facial landmark point schema."""
+
+    x: float = Field(..., description="X coordinate")
+    y: float = Field(..., description="Y coordinate")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class ImageProcessingRequest(BaseModel):
-    """Request schema for image processing."""
-    image: str = Field(..., description="Base64 encoded image")
-    landmarks: List[LandmarkPoint] = Field(..., description="Facial landmark points")
-    segmentation_map: str = Field(..., description="Base64 encoded segmentation map")
+class ProcessingRequest(BaseModel):
+    """Facial processing request schema."""
 
+    image_data: str = Field(..., description="Base64 encoded image data")
+    landmarks: List[LandmarkPoint] = Field(
+        ..., min_length=68, description="68 facial landmarks"
+    )
+    output_format: str = Field("svg", description="Output format (svg, png, json)")
+    style: Optional[str] = Field(None, description="Processing style")
 
-class JobStatusResponse(BaseModel):
-    """Response schema for job status."""
-    job_id: str
-    status: str
-    message: Optional[str] = None
+    @field_validator("landmarks")
+    @classmethod
+    def validate_landmarks(cls, v):
+        if len(v) < 68:
+            raise ValueError("At least 68 landmarks are required")
+        return v
+
+    @field_validator("output_format")
+    @classmethod
+    def validate_output_format(cls, v):
+        allowed_formats = ["svg", "png", "json"]
+        if v.lower() not in allowed_formats:
+            raise ValueError(f"Output format must be one of: {allowed_formats}")
+        return v.lower()
 
 
 class ProcessingResponse(BaseModel):
-    """Response schema for completed processing."""
-    svg: Optional[str] = None
-    mask_contours: Optional[MaskContours] = None
-    status: str = "completed"
+    """Facial processing response schema."""
+
+    job_id: str = Field(..., description="Unique job identifier")
+    status: str = Field(..., description="Processing status")
+    message: str = Field(..., description="Response message")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class ProcessingErrorResponse(BaseModel):
-    """Response schema for processing errors."""
-    detail: str
-    error_code: str
-    job_id: Optional[str] = None
+class JobStatusResponse(BaseModel):
+    """Job status response schema."""
+
+    job_id: str = Field(..., description="Job identifier")
+    status: str = Field(..., description="Current status")
+    result: Optional[Dict[str, Any]] = Field(None, description="Processing result")
+    error: Optional[str] = Field(None, description="Error message if failed")
+    created_at: Optional[datetime] = Field(None, description="Job creation time")
+    completed_at: Optional[datetime] = Field(None, description="Job completion time")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class RateLimitResponse(BaseModel):
-    """Response schema for rate limit exceeded."""
-    detail: str
-    error_code: str = "RATE_LIMIT_EXCEEDED"
-    rate_limit: Dict[str, Any]
+class ContourRegion(BaseModel):
+    """Facial contour region schema."""
+
+    region_id: str = Field(..., description="Region identifier")
+    region_name: str = Field(..., description="Human-readable region name")
+    contours: List[List[LandmarkPoint]] = Field(..., description="Contour points")
+    style: Dict[str, Any] = Field(..., description="Visual style properties")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProcessingResult(BaseModel):
+    """Processing result schema."""
+
+    job_id: str = Field(..., description="Job identifier")
+    regions: List[ContourRegion] = Field(..., description="Processed regions")
+    output_format: str = Field(..., description="Output format")
+    style: str = Field(..., description="Applied style")
+    processed_at: str = Field(..., description="Processing timestamp")
+
+    model_config = ConfigDict(from_attributes=True)

@@ -1,57 +1,76 @@
 """
-Authentication schemas for request/response validation.
+Authentication Pydantic schemas for request/response validation.
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
+
+from src.auth.models import RefreshToken, User
+from src.auth.utils import validate_password_strength, validate_username
 
 
-class UserCreate(BaseModel):
-    """Schema for user registration."""
-    username: str = Field(..., min_length=3, max_length=50, description="Username")
-    email: EmailStr = Field(..., description="Email address")
-    password: str = Field(..., min_length=8, max_length=100, description="Password")
-    
-    @validator('username')
-    def validate_username(cls, v):
-        if not v.isalnum():
-            raise ValueError('Username must contain only alphanumeric characters')
-        return v.lower()
-    
-    @validator('password')
+class UserBase(BaseModel):
+    """Base user schema."""
+
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    """User creation schema."""
+
+    password: str = Field(..., min_length=8)
+
+    @field_validator("password")
+    @classmethod
     def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not any(c.islower() for c in v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one digit')
+        is_valid, error = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError(error)
+        return v
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v):
+        is_valid, error = validate_username(v)
+        if not is_valid:
+            raise ValueError(error)
         return v
 
 
 class UserLogin(BaseModel):
-    """Schema for user login."""
-    username: str = Field(..., description="Username or email")
-    password: str = Field(..., description="Password")
+    """User login schema."""
 
-
-class UserResponse(BaseModel):
-    """Schema for user response."""
-    id: int
     username: str
-    email: str
+    password: str
+
+
+class UserUpdate(BaseModel):
+    """User update schema."""
+
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
+
+
+class UserResponse(UserBase):
+    """User response schema."""
+
+    id: int
     is_active: bool
     is_superuser: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):
-    """Schema for token response."""
+    """Token response schema."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -59,35 +78,21 @@ class TokenResponse(BaseModel):
 
 
 class TokenRefresh(BaseModel):
-    """Schema for token refresh."""
+    """Token refresh schema."""
+
     refresh_token: str
 
 
 class PasswordChange(BaseModel):
-    """Schema for password change."""
-    current_password: str = Field(..., description="Current password")
-    new_password: str = Field(..., min_length=8, max_length=100, description="New password")
-    
-    @validator('new_password')
-    def validate_new_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not any(c.islower() for c in v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one digit')
+    """Password change schema."""
+
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v):
+        is_valid, error = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError(error)
         return v
-
-
-class UserUpdate(BaseModel):
-    """Schema for user profile update."""
-    email: Optional[EmailStr] = None
-    is_active: Optional[bool] = None
-
-
-class AuthError(BaseModel):
-    """Schema for authentication errors."""
-    detail: str
-    error_code: str
