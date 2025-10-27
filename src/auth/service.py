@@ -32,6 +32,7 @@ from src.auth.utils import (
     verify_password,
     verify_token,
 )
+from src.shared.database import SessionDep
 from src.shared.utils import logger
 
 
@@ -233,12 +234,12 @@ class AuthService:
 # ========== DEPENDENCY INJECTION FUNCTIONS ==========
 
 
-def get_user_repository(session) -> IUserRepository:
+def get_user_repository(session: SessionDep) -> IUserRepository:
     """Get user repository instance."""
     return UserRepository(session)
 
 
-def get_token_repository(session) -> IRefreshTokenRepository:
+def get_token_repository(session: SessionDep) -> IRefreshTokenRepository:
     """Get token repository instance."""
     return RefreshTokenRepository(session)
 

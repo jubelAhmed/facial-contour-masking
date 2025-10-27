@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.auth.models import User
 from src.auth.service import AuthService, get_auth_service
 from src.auth.utils import verify_token
+from src.facial.service import FacialProcessingService, get_facial_processing_service
 from src.shared.database import SessionDep
 from src.shared.utils import logger
 
@@ -128,6 +129,14 @@ def require_active_user(func):
     return func
 
 
+# Facial processing dependencies
+async def get_facial_service(
+    facial_service: FacialProcessingService = Depends(get_facial_processing_service),
+) -> FacialProcessingService:
+    """Get facial processing service instance."""
+    return facial_service
+
+
 # Export all dependencies
 __all__ = [
     "security",
@@ -140,5 +149,6 @@ __all__ = [
     "require_auth",
     "require_superuser",
     "require_active_user",
+    "get_facial_service",
     "SessionDep",
 ]

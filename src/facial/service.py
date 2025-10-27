@@ -31,6 +31,7 @@ from src.facial.schemas import (
     ProcessingRequest,
     ProcessingResponse,
 )
+from src.shared.database import SessionDep
 from src.shared.utils import logger
 
 
@@ -253,12 +254,12 @@ class FacialProcessingService:
 # ========== DEPENDENCY INJECTION FUNCTIONS ==========
 
 
-def get_processing_job_repository(session) -> IProcessingJobRepository:
+def get_processing_job_repository(session: SessionDep) -> IProcessingJobRepository:
     """Get processing job repository instance."""
     return ProcessingJobRepository(session)
 
 
-def get_perceptual_hash_repository(session) -> IPerceptualHashRepository:
+def get_perceptual_hash_repository(session: SessionDep) -> IPerceptualHashRepository:
     """Get perceptual hash repository instance."""
     return PerceptualHashRepository(session)
 
